@@ -10,6 +10,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- jsPDF for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -252,6 +255,17 @@
                     </button>
                 </div>
 
+                <!-- PDF Export Section -->
+                <div class="bg-rose-50 p-4 rounded-xl border border-rose-100">
+                    <h4 class="font-bold text-gray-800 text-sm flex items-center gap-2">
+                        <i class="fa-solid fa-file-pdf text-rose-600"></i> PDF Report
+                    </h4>
+                    <p class="text-xs text-gray-500 mt-1 mb-3">Sabhi income aur expense entries ka PDF report download karein.</p>
+                    <button onclick="exportPDF()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold py-2 px-3 rounded-lg text-xs shadow transition-all flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-file-pdf"></i> PDF Download Karein
+                    </button>
+                </div>
+
                 <!-- Import Section -->
                 <div class="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
                     <h4 class="font-bold text-gray-800 text-sm flex items-center gap-2">
@@ -442,7 +456,72 @@
             downloadAnchor.remove();
         }
 
-        // Import Data from JSON file
+        // Export Data as PDF Report
+        function exportPDF() {
+            if (transactions.length === 0) {
+                alert("PDF banane ke liye koi data nahi hai!");
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            // Totals
+            let totalIncome = 0;
+            let totalExpense = 0;
+            transactions.forEach(t => {
+                if (t.type === 'income') totalIncome += t.amount;
+                else totalExpense += t.amount;
+            });
+            const totalBalance = totalIncome - totalExpense;
+
+            // Title
+            doc.setFontSize(16);
+            doc.setFont(undefined, 'bold');
+            doc.text('Paisa Tracker - Income & Expense Report', 14, 16);
+            doc.setFontSize(9);
+            doc.setFont(undefined, 'normal');
+            doc.text(`Generated on: ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}`, 14, 22);
+
+            // Summary box
+            doc.setFontSize(10);
+            doc.setFont(undefined, 'bold');
+            doc.text(`Total Income: Rs. ${totalIncome.toLocaleString('en-IN')}`, 14, 32);
+            doc.text(`Total Expense: Rs. ${totalExpense.toLocaleString('en-IN')}`, 90, 32);
+            doc.text(`Balance: Rs. ${totalBalance.toLocaleString('en-IN')}`, 160, 32);
+
+            // Sort transactions by date (newest first) for the report
+            const sortedTransactions = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            const tableRows = sortedTransactions.map(t => [
+                formatDate(t.date),
+                t.type === 'income' ? 'Income' : 'Expense',
+                t.reason,
+                `${t.type === 'income' ? '+' : '-'} Rs. ${t.amount.toLocaleString('en-IN')}`
+            ]);
+
+            doc.autoTable({
+                startY: 38,
+                head: [['Date', 'Type', 'Reason', 'Amount']],
+                body: tableRows,
+                theme: 'grid',
+                headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
+                styles: { fontSize: 9, cellPadding: 3 },
+                columnStyles: {
+                    3: { halign: 'right' }
+                },
+                didParseCell: function (data) {
+                    if (data.section === 'body' && data.column.index === 3) {
+                        const isIncome = data.cell.raw.startsWith('+');
+                        data.cell.styles.textColor = isIncome ? [5, 150, 105] : [225, 29, 72];
+                    }
+                }
+            });
+
+            doc.save(`paisa_tracker_report_${new Date().toISOString().slice(0, 10)}.pdf`);
+        }
+
+
         function importData(event) {
             const file = event.target.files[0];
             if (!file) return;
