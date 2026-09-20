@@ -390,6 +390,24 @@
             }
         }
 
+        // Agar ek modal band karke turant doosra kholna ho (jaise Password -> Edit),
+        // to history.back() asynchronous hota hai. Isliye naya modal popstate ke BAAD kholte hain.
+        let pendingOpenModal = null;
+
+        function runPendingOpen() {
+            if (pendingOpenModal) {
+                const fn = pendingOpenModal;
+                pendingOpenModal = null;
+                fn();
+            }
+        }
+
+        function openModalAfterClose(fn) {
+            pendingOpenModal = fn;
+            // Safety net: agar popstate kisi wajah se fire na ho to bhi modal khule
+            setTimeout(runPendingOpen, 200);
+        }
+
         // Listen for hardware back button (popstate event)
         window.addEventListener('popstate', function (event) {
             if (modalStack.length > 0) {
@@ -399,6 +417,7 @@
                     closeModalElement(modalEl, true);
                 }
             }
+            runPendingOpen();
         });
 
         // Open / Close Entry Modal
@@ -720,7 +739,7 @@
                 } else if (action === 'edit') {
                     const transactionToEdit = transactions.find(t => t.id === id);
                     if (transactionToEdit) {
-                        openEditModal(transactionToEdit);
+                        openModalAfterClose(() => openEditModal(transactionToEdit));
                     }
                 }
             } else {
